@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Avtget Sender",
+  "version": "1.0.0",
+  "description": "Send the current page (or a right-clicked link) to the Avtget desktop app for archive/audio/transcript/summarize processing.",
+
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "contextMenus",
+    "storage",
+    "notifications"
+  ],
+
+  "host_permissions": [
+    "http://127.0.0.1/*"
+  ],
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Send to Avtget"
+  },
+
+  "background": {
+    "scripts": ["background.js"]
+  },
+
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "avtget-sender@phase-space.local",
+      "strict_min_version": "115.0"
+    }
+  }
+}

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Avtget Sender</title>
+<style>
+  body { width: 260px; margin: 0; padding: 12px; font-family: system-ui, sans-serif; background: #1f2937; color: #f9fafb; }
+  h1 { font-size: 11px; margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 1px; color: #9ca3af; font-weight: 600; }
+  #health { font-size: 11px; margin-bottom: 8px; padding: 6px 8px; border-radius: 4px; background: #374151; }
+  #health.ok { color: #34d399; }
+  #health.err { color: #f87171; }
+  #url { font-size: 10px; color: #9ca3af; word-break: break-all; margin: 6px 0 10px 0; padding: 6px 8px; background: #111827; border-radius: 4px; max-height: 48px; overflow: hidden; }
+  button.action { display: block; width: 100%; margin: 4px 0; padding: 9px 10px; border: none; border-radius: 4px; background: #4f46e5; color: white; font-size: 13px; cursor: pointer; text-align: left; font-weight: 500; }
+  button.action:hover { background: #6366f1; }
+  button.action:disabled { background: #4b5563; cursor: not-allowed; }
+  #result { font-size: 11px; margin-top: 10px; padding: 6px 8px; border-radius: 4px; display: none; }
+  #result.ok { display: block; background: #065f46; color: #d1fae5; }
+  #result.err { display: block; background: #7f1d1d; color: #fecaca; }
+  .footer { margin-top: 10px; font-size: 10px; text-align: right; }
+  .footer a { color: #9ca3af; text-decoration: none; }
+  .footer a:hover { color: #f9fafb; text-decoration: underline; }
+</style>
+</head>
+<body>
+  <h1>Send to Avtget</h1>
+  <div id="health">Checking connection&hellip;</div>
+  <div id="url">Loading current tab&hellip;</div>
+  <button class="action" data-preset="archive_video">Archive video</button>
+  <button class="action" data-preset="save_audio">Save audio</button>
+  <button class="action" data-preset="save_transcript">Save transcript</button>
+  <button class="action" data-preset="summarize">Summarize</button>
+  <div id="result"></div>
+  <div class="footer"><a href="#" id="options-link">Options</a></div>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Avtget Sender — Options</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 560px; margin: 40px auto; padding: 24px; color: #111827; background: #f9fafb; }
+  h1 { font-size: 20px; margin: 0 0 4px 0; }
+  h2 { font-size: 14px; margin: 24px 0 6px 0; color: #374151; }
+  p { font-size: 13px; color: #4b5563; line-height: 1.5; }
+  code { background: #e5e7eb; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+  label { display: block; margin-top: 16px; font-weight: 600; font-size: 13px; color: #111827; }
+  input { width: 100%; padding: 8px 10px; margin-top: 4px; border: 1px solid #d1d5db; border-radius: 4px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; box-sizing: border-box; }
+  input:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15); }
+  .hint { font-size: 11px; color: #6b7280; margin-top: 4px; }
+  .buttons { margin-top: 24px; display: flex; gap: 10px; }
+  button { padding: 9px 18px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; }
+  button.primary { background: #4f46e5; color: white; }
+  button.primary:hover { background: #6366f1; }
+  button.secondary { background: #e5e7eb; color: #374151; }
+  button.secondary:hover { background: #d1d5db; }
+  #status { margin-top: 20px; padding: 10px 12px; border-radius: 4px; font-size: 12px; display: none; }
+  #status.ok { display: block; background: #d1fae5; color: #065f46; }
+  #status.err { display: block; background: #fee2e2; color: #991b1b; }
+  #status.info { display: block; background: #dbeafe; color: #1e40af; }
+</style>
+</head>
+<body>
+  <h1>Avtget Sender</h1>
+  <p>This extension sends the current tab (or a right-clicked link) to the Avtget desktop app over a local HTTP connection. The values below must match the HTTP server settings in Avtget's <code>config.ini</code> (or its Settings dialog).</p>
+
+  <h2>Connection</h2>
+
+  <label for="host">Host URL</label>
+  <input id="host" type="text" placeholder="http://127.0.0.1:47923" />
+  <div class="hint">Change the port if you customized <code>http_server_port</code>.</div>
+
+  <label for="token">Bearer token</label>
+  <input id="token" type="password" placeholder="paste from config.ini (http_server_token)" />
+  <div class="hint">Copy the <code>http_server_token</code> value from Avtget's <code>config.ini</code>. The token is auto-generated on Avtget's first launch and never changes unless you clear it.</div>
+
+  <div class="buttons">
+    <button id="save" class="primary">Save</button>
+    <button id="test" class="secondary">Test connection</button>
+  </div>
+
+  <div id="status"></div>
+
+  <script src="options.js"></script>
+</body>
+</html>

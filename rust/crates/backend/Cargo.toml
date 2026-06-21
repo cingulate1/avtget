@@ -1,0 +1,14 @@
+[package]
+name = "avtget-backend"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+avtget-config = { path = "../config" }
+avtget-domain = { path = "../domain" }
+clap.workspace = true
+serde_json.workspace = true
+csv.workspace = true
+ureq.workspace = true
+tiktoken-rs.workspace = true

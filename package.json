@@ -1,0 +1,44 @@
+{
+  "name": "avtget",
+  "version": "1.0.0",
+  "description": "avtget GUI - Tauri 2 + React frontend for the Rust media downloader/transcriber backend",
+  "scripts": {
+    "dev": "npm run tauri:dev",
+    "dev:vite": "vite",
+    "tauri:dev": "tauri dev",
+    "build": "npm run build:renderer",
+    "build:renderer": "vite build",
+    "build:backend:release": "cargo build --manifest-path rust/Cargo.toml -p avtget-backend --release",
+    "tauri:build": "tauri build",
+    "package": "npm run build:backend:release && npm run tauri:build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "youtube",
+    "downloader",
+    "transcript",
+    "whisper"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@tauri-apps/api": "^2.1.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "zustand": "^5.0.9"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.17",
+    "@tauri-apps/cli": "^2.1.0",
+    "@types/node": "^25.0.0",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.2",
+    "autoprefixer": "^10.4.22",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.17",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.7"
+  }
+}

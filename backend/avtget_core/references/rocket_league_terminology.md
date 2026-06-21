@@ -1,0 +1,178 @@
+# Rocket League player/content-creator/organization names
+
+*for use with audio transcripts that were auto-captioned by youtube, whisper, or some other source, and thus likely contain domain-specific transcription errors*
+
+INSTRUCTIONS:
+- Do not include any parenthetical pronunciation notes or additional commentary
+- Do not include any special formatting to highlight replacements.
+- Use the terms below as clues as to the ground-truth of what the speaker in the transcript was likely saying.
+- You do not need to de-compress the spoken contraction of a player or organization's name (e.g., converting "FK" back to "Firstkiller" -- but knowning who is being referenced will still help your contextual understanding for other surrounding names/phrasing)
+
+## Players/Individuals
+- BeastMode
+- Atomic
+- Daniel
+- Firstkiller (often shortened to "FK", sometimes referred to as "Fourthkiller")
+- LJ
+- Kofyr (often pronounced "co-fur" or "cough-urr")
+- Reveal
+- Diaz
+- Zach (formerly known as "Scribblez"; may be transcribed as "scribbles", "scribblez", or just "zach")
+- Zen
+- ScrubKilla
+- Exotiik (Vitality player, sometimes referred to as "Exo" — context is required to distinguish from "eekso")
+- Vatira
+- Juicy
+- Nass
+- Oski (Gentlemates player, may also appear as "Oscar" which is his real name)
+- Joyo
+- ApparentlyJack (often shortened to "Jack" or "AppJack")
+- TempoH (often found as "Tempo")
+- Seikoo
+- Accro
+- Ejby (may be pronunced "ee jay bee why" or "Edge-be")
+- Dralii
+- Rw9 (pronounced "rawaz" or "ruas")
+- Killeerz (pronounced either "kill ears" or "killers")
+- The Twins (refers to Killeerz & Rw9, identical twins)
+- Nwpo (pronounced "nobu","now poe", "nehpo", or "nu poe")
+- MonkeyM00n
+- TRK511 (almost always shortened to "TRK")
+- Yanxnz (almost always referred to as "Yan" -- RARELY as "Yanks")
+- Catalysm
+- Majicbear
+- Frosty
+- Rise
+- Radosin (pronounced "Ruh DOE sin", often shortened to "RAD-oh")
+- Alpha54 (often shortened to "alpha")
+- Chronic
+- Tawk
+- Retals
+- Kaka
+- Torsos
+- Mawkzy (1v1 specialist, may be transcribed as "Moxy")
+- Nush
+- Taroco (may be transcribed as "Taruk")
+- Royales
+- Atomik (less common than "Atomic" -- often referred to as "Spanish Atomic", "Atomic with a K")
+- 2Piece
+- Wahvey (pronouned "Wavy")
+- Swift
+- Sweaty
+- Pan
+- Dansku
+- Snowyy
+- Rezears
+- Aztromick
+- Graybeard
+- LuiisP
+- 2Die4
+- GarrettG (often shortened to "Garrett", also referred to as "Captain America" or just "Captain")
+- Satthew (NRG coach; sometimes found as "Satu")
+- rawGreg (Gen.G coach, may be transcribed as "real Greg")
+- Xpére (SSG coach, pronounced "x-pair")
+- eekso
+- Snasky (often found as "snazzy" or similar)
+- Ferra
+- Lawler
+- TBates (often shortened to "Bates")
+- Johnyboi (often shortened to "Johnny")
+- CJCJ (often shortened to "CJ")
+- Dazerin (caster/commentator; "Daz" and "DeMar" also refer to this individual)
+- Gibbs
+- Wavepunk
+- JamesBot
+- Itachi
+- Gotaga (Gentlemates co-founder and content creator)
+- Brawks (Gentlemates co-founder)
+- Squeezie (Gentlemates co-founder)
+- Jynxzi (Twitch creator)
+- Lethamyr (former pro, now major RL youtuber)
+- Squishy
+- Torment
+- JKnaps (sometimes shortened to "knaps")
+- Kronovi
+- Kuxir97 (often shortened to "Kuxir" or "Kux")
+- Turbopolsa (often referred to as just "Turbo")
+- Kaydop
+- Deevo
+- Chausette
+- Yukeo
+- Paschy
+- Violent Panda
+- Marky (historical player, often referenced alongside ScrubKilla and Kuxir)
+- Sizz (rare name, usually referenced in conjunction with Rizzo)
+- Memory
+
+## Organizations/teams
+- GenG
+- SSG (the full name is "Spacstation Gaming" <-- leave as is if found)
+- NRG
+- Cloud9
+- G2
+- RMC
+- Muffin Men
+- Vitality
+- Karmine Corps (often shortened to "K Corps" or "KC", the latter of which may be transcribed as "Casey")
+- Shopify Rebellion (often shortened to just "shopify" or just "rebellion")
+- RLEsports
+- GeeKay
+- GentleMates
+- Shuffle's Kittens
+- Redacted
+- NIP
+- 100X
+- Furia
+- Team Secret (often shortened to just "secret")
+- Wildcard
+- BLAST (organization in charge of running RLEsports)
+- Psyonix
+- Epic Games (often shortend to just "Epic")
+- MiBR (short for "made in brazil" -- a SAM team)
+- Feastaboniam
+- FUT esports (almost always mistranscribed as "Foot")
+- Twisted Minds (may be transcribed as "Twisted Mines")
+- Virtus Pro (often shortened to "VP", may be transcribed as "Versus Pro" or "VertisPro")
+- Man City (Manchester City esports)
+- Falcons
+- Five Fears
+
+## Tournaments\Events
+- FIFAe
+- Gamers8
+- LAN (may be found as "land" or "line" among other mistranscriptions)
+- Kickoff LAN (a specific LAN)
+- ESL (a historical tournament series)
+- EWC (short for "eSports World Cup")
+
+## Regions
+- NA
+- EU
+- SAM (often found as "Sam")
+- MENA (will often be referenced in conjunction with other regions)
+- OCE
+- SSA
+- APAC
+
+## Other
+- Rocket League (usually transcribed correctly, but may also be found as a semantically unrelated homophone)
+- RLCS
+- RLRS (a much less common historical variant of the RLCS, will only be found as a reference to to the past)
+- LAN (referring to an event, may be found as "land" or "line" among other homophones)
+- Kickoff LAN (a specific LAN)
+- DDoS
+- Rust (a different video game)
+- peak (used as a verb, often found in a verb conjugation describing a player who played well)
+- ban waves (as in waves of bans)
+- Buccholz (a seeding system, designed by an individual, Bruno Buccholz. If the first name is used, leave it as is). 
+- supersonic (a Rocket League specific gameplay term)
+- 4-0 ("four oh", a four to zero result in a best-of-seven game series)
+- OT (short for "overtime")
+- DC (short for "disconnection")
+- MMR (matchmaking rating, may be transcribed as "9mm", "MMO", or other homophones)
+- kickoff (may be transcribed as "key-off" or "key off")
+- scrim/scrimming (practice matches between teams, may be transcribed as "screaming" or "streaming")
+- nameplate aura (the psychological effect of seeing a famous player's name; may be transcribed as "name play aura" or "name plate")
+- Swiss (a group stage format, may be transcribed as "Swiss" correctly but also as homophones in context)
+- Chalked Cast (Rocket League podcast hosted by GarrettG, CJCJ, and Johnyboi; may be transcribed as "Chorecast", "Chalky Cast", "Choked Cast")
+- UEFN (unreal editor for Fortnite)

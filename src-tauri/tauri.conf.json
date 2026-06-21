@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "avtget",
+  "version": "1.0.0",
+  "identifier": "com.avtget.app",
+  "build": {
+    "beforeDevCommand": "npm run dev:vite",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build:renderer",
+    "frontendDist": "../build/renderer"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "avtget",
+        "width": 1024,
+        "height": 1190,
+        "resizable": true
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": [],
+    "icon": [
+      "icons/icon.ico"
+    ]
+  }
+}
