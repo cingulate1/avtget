@@ -40,7 +40,6 @@ export function InputSection() {
         />
       )}
       <ActionButtons
-        inputs={inputs}
         timeframe={showTimeframe ? `${timeframeValue}${timeframeUnit}` : undefined}
       />
     </div>

@@ -966,20 +966,28 @@ where
                                 )?;
                             }
                             Ok(None) => {
-                                let reason = if cleaner_for_selector(&auto_clean_selector).is_none()
-                                {
-                                    "auto-clean disabled"
-                                } else if cleaner_bridge.is_none() {
-                                    "cleaner bridge unavailable"
-                                } else {
-                                    "not applicable"
-                                };
-                                emitter.emit(BackendEvent::Log {
-                                    message: format!(
-                                        "Transcript auto-clean skipped for {} ({})",
-                                        url_input.item_id, reason
-                                    ),
-                                })?;
+                                // Claude isn't a bridge cleaner, so maybe_auto_clean_transcript
+                                // always returns Ok(None) for it (cleaner_for_selector(Claude)
+                                // == None). The real Claude clean runs in-process just below and
+                                // logs "Cleaning started", so a "skipped (auto-clean disabled)"
+                                // line here is misleading — suppress it for the Claude case.
+                                if !matches!(auto_clean_selector, AutoCleanTranscript::Claude) {
+                                    let reason = if cleaner_for_selector(&auto_clean_selector)
+                                        .is_none()
+                                    {
+                                        "auto-clean disabled"
+                                    } else if cleaner_bridge.is_none() {
+                                        "cleaner bridge unavailable"
+                                    } else {
+                                        "not applicable"
+                                    };
+                                    emitter.emit(BackendEvent::Log {
+                                        message: format!(
+                                            "Transcript auto-clean skipped for {} ({})",
+                                            url_input.item_id, reason
+                                        ),
+                                    })?;
+                                }
                             }
                             Err(err) => {
                                 emitter.emit(BackendEvent::Log {

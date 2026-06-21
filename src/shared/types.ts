@@ -33,6 +33,12 @@ export interface JobConfig {
   // clean → summarize chain, so this flag is the only thing the UI needs
   // to send when the user submits with the Summarize checkbox on.
   summarize?: boolean;
+  // Absolute path to a frozen config.ini snapshot taken at GO time. The Tauri
+  // shell points the spawned backend's AVTGET_CONFIG_PATH at this file (and
+  // strips the field from the payload), locking in the config-only settings
+  // (summarize_model, claude_model_effort, filename_template, paths, …) so a
+  // queued/running job is immune to later edits.
+  config_snapshot_path?: string;
 }
 
 export interface Settings {

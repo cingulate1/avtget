@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import type { JobItem, JobStatus, ArtifactStatus, ExternalJobRequest } from '@/shared/types';
+import type { JobItem, JobStatus, ArtifactStatus, JobConfig } from '@/shared/types';
 import { sanitizeUrl } from '../utils/youtube';
+import { getDesktopAPI } from '../desktopApi';
 
 interface ProcessingModes {
   video: boolean;
@@ -9,9 +10,32 @@ interface ProcessingModes {
   summarize: boolean;
 }
 
+// Mirror the five main-window toggles into config.ini immediately on every
+// change. Unidirectional (GUI -> file): the file is never read back into these
+// toggles except for the one-time startup seed from the default_* keys (see
+// App.tsx's initial-load effect). Fire-and-forget — a write failure must never
+// block the UI, and the desktop bridge may be absent outside the Tauri runtime.
+function persistLiveModes(modes: ProcessingModes, verbose: boolean): void {
+  try {
+    void getDesktopAPI().setLiveModes({ ...modes, verbose }).catch(() => {});
+  } catch {
+    // Desktop bridge unavailable — nothing to persist.
+  }
+}
+
 export interface ClipRange {
   start: string;
   end: string;
+}
+
+// One fully-frozen job awaiting dispatch — created per unique input at GO time.
+// `config` is the complete, immutable JobConfig (single input + frozen settings
+// + its own config_snapshot_path); the dispatcher hands these to the backend
+// one at a time. `itemId` is the sanitized input and the key of the matching
+// UI job in `jobs`.
+export interface QueuedJob {
+  itemId: string;
+  config: JobConfig;
 }
 
 interface JobState {
@@ -27,12 +51,12 @@ interface JobState {
   // Track transcript files that need manual Ollama cleaning or should be skipped
   manualCleanInputs: string[];
   skipInputs: string[];
-  // Firefox-extension intakes that arrived while Avtget was busy or the input
-  // fields were populated. Drained one-at-a-time on each `backend_exited`
-  // event, at which point the shell's process slot is guaranteed free — see
-  // useBackendEvents.ts. Survives `reset()` so a fresh batch kicked off by
-  // the drain doesn't lose the rest of the queue.
-  pendingExternalJobs: ExternalJobRequest[];
+  // The unified job queue. Every submitted input — manual Go or Firefox intake
+  // — becomes one frozen QueuedJob here and is dispatched to the backend one at
+  // a time on each `backend_exited` event (see jobDispatch.ts /
+  // useBackendEvents.ts); the backend runs a single process per job. Survives
+  // `reset()`.
+  jobQueue: QueuedJob[];
 
   setInputs: (inputs: string[]) => void;
   setClipTimestamps: (timestamps: ClipRange[][]) => void;
@@ -53,10 +77,10 @@ interface JobState {
   setEpisodeLimit: (limit: number) => void;
   addManualCleanInput: (path: string) => void;
   addSkipInput: (path: string) => void;
-  enqueueExternalJob: (request: ExternalJobRequest) => void;
-  requeueExternalJobAtFront: (request: ExternalJobRequest) => void;
-  drainNextExternalJob: () => ExternalJobRequest | undefined;
-  clearPendingExternalJobs: () => void;
+  enqueueJobs: (units: QueuedJob[]) => void;
+  requeueJobAtFront: (unit: QueuedJob) => void;
+  dequeueJob: () => QueuedJob | undefined;
+  clearJobQueue: () => void;
 }
 
 export const useJobStore = create<JobState>((set, get) => ({
@@ -71,7 +95,7 @@ export const useJobStore = create<JobState>((set, get) => ({
   episodeLimit: 10,
   manualCleanInputs: [],
   skipInputs: [],
-  pendingExternalJobs: [],
+  jobQueue: [],
 
   // The single sanitization point for URL entry into the app. Every path that
   // places a value in the input field (typing commit, paste, file drop, .txt
@@ -119,13 +143,17 @@ export const useJobStore = create<JobState>((set, get) => ({
   },
 
   setRunning: (running) => set({ isRunning: running }),
-  setVerboseMode: (verbose) => set({ verboseMode: verbose }),
-  setModes: (modes) =>
-    set({
-      // Summarize requires transcript. Clear it automatically if transcript
-      // was unchecked so the UI can never enter an inconsistent state.
-      currentModes: modes.transcript ? modes : { ...modes, summarize: false },
-    }),
+  setVerboseMode: (verbose) => {
+    set({ verboseMode: verbose });
+    persistLiveModes(get().currentModes, verbose);
+  },
+  setModes: (modes) => {
+    // Summarize requires transcript. Clear it automatically if transcript
+    // was unchecked so the UI can never enter an inconsistent state.
+    const nextModes = modes.transcript ? modes : { ...modes, summarize: false };
+    set({ currentModes: nextModes });
+    persistLiveModes(nextModes, get().verboseMode);
+  },
 
   addJob: (itemId) => {
     const { jobs, currentModes } = get();
@@ -221,22 +249,22 @@ export const useJobStore = create<JobState>((set, get) => ({
     skipInputs: [...state.skipInputs, path],
   })),
 
-  enqueueExternalJob: (request) =>
-    set((state) => ({ pendingExternalJobs: [...state.pendingExternalJobs, request] })),
+  enqueueJobs: (units) =>
+    set((state) => ({ jobQueue: [...state.jobQueue, ...units] })),
 
-  // Used by the intake-retry path when start_job failed because the previous
-  // backend hadn't finished exiting: the request goes back to the FRONT so
-  // the next backend_exited drain retries it before newer intakes.
-  requeueExternalJobAtFront: (request) =>
-    set((state) => ({ pendingExternalJobs: [request, ...state.pendingExternalJobs] })),
+  // Used by the dispatcher's retry path when start_job failed because the
+  // previous backend hadn't finished exiting: the unit goes back to the FRONT
+  // so the next backend_exited dispatch retries it before newer units.
+  requeueJobAtFront: (unit) =>
+    set((state) => ({ jobQueue: [unit, ...state.jobQueue] })),
 
-  drainNextExternalJob: () => {
-    const { pendingExternalJobs } = get();
-    if (pendingExternalJobs.length === 0) return undefined;
-    const [next, ...rest] = pendingExternalJobs;
-    set({ pendingExternalJobs: rest });
+  dequeueJob: () => {
+    const { jobQueue } = get();
+    if (jobQueue.length === 0) return undefined;
+    const [next, ...rest] = jobQueue;
+    set({ jobQueue: rest });
     return next;
   },
 
-  clearPendingExternalJobs: () => set({ pendingExternalJobs: [] }),
+  clearJobQueue: () => set({ jobQueue: [] }),
 }));

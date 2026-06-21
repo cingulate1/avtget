@@ -9,7 +9,7 @@ use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -30,6 +30,10 @@ struct BackendState {
 
 struct ManagedProcess {
     child: Child,
+    // Per-job frozen config snapshot (set when the job was dispatched with a
+    // `config_snapshot_path`). Removed when the process exits so avtget_temp
+    // doesn't accumulate snapshots over a session.
+    config_snapshot: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,6 +66,34 @@ struct SettingsPayload {
     // resolves it from the user's saved Claude Code default, and effort levels
     // the resolved model doesn't support fall back to the nearest one it does.
     claude_model_effort: String,
+}
+
+// Live working-state mirror of the five main-window checkboxes. Written to
+// config.ini immediately on every toggle (unidirectional GUI -> file) and
+// deliberately kept distinct from the `default_*` keys above: the defaults are
+// the Save-gated seed the GUI reads once on startup, while these reflect the
+// user's current selection. Nothing reads them back into the GUI.
+#[derive(Debug, Clone, Copy, Deserialize)]
+struct LiveModes {
+    video: bool,
+    audio: bool,
+    transcript: bool,
+    summarize: bool,
+    verbose: bool,
+}
+
+impl LiveModes {
+    // Fallback when the file has no live keys yet (fresh config, or an upgrade
+    // from a version that predates them): seed from the default_* settings.
+    fn from_default_settings(settings: &SettingsPayload) -> Self {
+        Self {
+            video: settings.default_video,
+            audio: settings.default_audio,
+            transcript: settings.default_transcript,
+            summarize: settings.default_summarize,
+            verbose: settings.default_verbose,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -273,6 +305,46 @@ fn parse_ini_default_section(raw: &str) -> HashMap<String, String> {
     values
 }
 
+// Serializes config.ini reads and writes so a GO-time snapshot can never
+// observe a partially-rewritten file (e.g. an instant checkbox toggle landing
+// at the same instant as a freeze). Each critical section wraps a SINGLE fs
+// operation — never hold this across another config op, to stay deadlock-free.
+fn config_guard() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+// Absolute temp directory. temp_directory is normalized to absolute on load
+// (see load_or_create_config), so this is normally a direct passthrough; the
+// relative branch is a defensive fallback mirroring the backend crate's own
+// resolve_relative_to_config behavior.
+fn resolve_temp_dir(settings: &SettingsPayload) -> PathBuf {
+    let candidate = PathBuf::from(&settings.temp_directory);
+    if candidate.is_absolute() {
+        return candidate;
+    }
+    config_path()
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(candidate)
+}
+
+// Unique id for snapshot filenames: wall-clock nanos times a process-local
+// counter, so two freezes in the same nanosecond can't collide.
+fn next_snapshot_id() -> u128 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let counter = COUNTER.fetch_add(1, Ordering::Relaxed) as u128;
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    nanos.wrapping_mul(1000).wrapping_add(counter % 1000)
+}
+
 fn load_or_create_config() -> Result<SettingsPayload, String> {
     let path = config_path();
     let base = path
@@ -286,8 +358,11 @@ fn load_or_create_config() -> Result<SettingsPayload, String> {
         return Ok(defaults);
     }
 
-    let content = fs::read_to_string(&path)
-        .map_err(|err| format!("Failed to read config at {}: {err}", path.display()))?;
+    let content = {
+        let _guard = config_guard();
+        fs::read_to_string(&path)
+    }
+    .map_err(|err| format!("Failed to read config at {}: {err}", path.display()))?;
     let values = parse_ini_default_section(&content);
 
     let http_token = values
@@ -301,7 +376,7 @@ fn load_or_create_config() -> Result<SettingsPayload, String> {
         .and_then(|raw| raw.trim().parse::<u16>().ok())
         .unwrap_or(defaults.http_server_port);
 
-    let settings = SettingsPayload {
+    let mut settings = SettingsPayload {
         storage_directory: values
             .get("storage_directory")
             .cloned()
@@ -380,6 +455,21 @@ fn load_or_create_config() -> Result<SettingsPayload, String> {
         ),
     };
 
+    // Every directory in config.ini is meant to be absolute (storage, ffmpeg,
+    // whisperx already are). Self-heal a relative temp_directory by anchoring it
+    // to the config file's directory: this matches the code default and, more
+    // importantly, keeps frozen config snapshots valid no matter where the
+    // snapshot .ini is written (the backend resolves a relative temp_directory
+    // against the config file's own parent, which for a snapshot is wrong).
+    if !settings.temp_directory.trim().is_empty()
+        && PathBuf::from(&settings.temp_directory).is_relative()
+    {
+        settings.temp_directory = base
+            .join(&settings.temp_directory)
+            .to_string_lossy()
+            .into_owned();
+    }
+
     // Persist the auto-generated token the first time we mint one so the user
     // sees it in config.ini and the Firefox extension can be configured with
     // the same value.
@@ -390,17 +480,29 @@ fn load_or_create_config() -> Result<SettingsPayload, String> {
     Ok(settings)
 }
 
-fn save_config_file(settings: &SettingsPayload) -> Result<(), String> {
-    let path = config_path();
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|err| {
-            format!(
-                "Failed to create config directory at {}: {err}",
-                parent.display()
-            )
-        })?;
+// Read the current live working-state keys straight off disk, falling back to
+// the default_* settings for any key not yet present. Used to preserve the
+// main-window toggle state whenever the file is rewritten from the Settings
+// dialog or created from scratch.
+fn read_live_modes_from_disk(settings: &SettingsPayload) -> LiveModes {
+    let fallback = LiveModes::from_default_settings(settings);
+    let Ok(content) = ({
+        let _guard = config_guard();
+        fs::read_to_string(config_path())
+    }) else {
+        return fallback;
+    };
+    let values = parse_ini_default_section(&content);
+    LiveModes {
+        video: parse_bool(values.get("video"), fallback.video),
+        audio: parse_bool(values.get("audio"), fallback.audio),
+        transcript: parse_bool(values.get("transcript"), fallback.transcript),
+        summarize: parse_bool(values.get("summarize"), fallback.summarize),
+        verbose: parse_bool(values.get("verbose"), fallback.verbose),
     }
+}
 
+fn config_file_contents(settings: &SettingsPayload, live: &LiveModes) -> String {
     let lines = [
         "[DEFAULT]".to_owned(),
         format!("storage_directory={}", settings.storage_directory),
@@ -429,10 +531,42 @@ fn save_config_file(settings: &SettingsPayload) -> Result<(), String> {
         format!("default_summarize_mode={}", settings.default_summarize_mode),
         format!("summarize_model={}", settings.summarize_model),
         format!("claude_model_effort={}", settings.claude_model_effort),
+        // Live working-state mirror of the main-window checkboxes (see
+        // LiveModes). Written instantly on every toggle; the GUI seeds the
+        // checkboxes from the default_* keys above on startup and never reads
+        // these back.
+        format!("video={}", live.video),
+        format!("audio={}", live.audio),
+        format!("transcript={}", live.transcript),
+        format!("summarize={}", live.summarize),
+        format!("verbose={}", live.verbose),
     ];
 
-    fs::write(&path, lines.join("\n") + "\n")
+    lines.join("\n") + "\n"
+}
+
+fn write_config_file(settings: &SettingsPayload, live: &LiveModes) -> Result<(), String> {
+    let path = config_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| {
+            format!(
+                "Failed to create config directory at {}: {err}",
+                parent.display()
+            )
+        })?;
+    }
+
+    let _guard = config_guard();
+    fs::write(&path, config_file_contents(settings, live))
         .map_err(|err| format!("Failed to save config at {}: {err}", path.display()))
+}
+
+fn save_config_file(settings: &SettingsPayload) -> Result<(), String> {
+    // Preserve the live working-state keys when rewriting from the Settings
+    // dialog or on first creation, so saving the defaults never clobbers the
+    // main-window toggle state (and vice versa).
+    let live = read_live_modes_from_disk(settings);
+    write_config_file(settings, &live)
 }
 
 type LogFile = Arc<Mutex<Option<fs::File>>>;
@@ -609,8 +743,15 @@ fn monitor_backend_exit(app: AppHandle, state: Arc<Mutex<Option<ManagedProcess>>
                             &log_file,
                         );
                     }
+                    let snapshot = process.config_snapshot.take();
                     *guard = None;
                     drop(guard);
+                    // The per-job config snapshot has served its purpose now that
+                    // the process is gone — remove it so avtget_temp doesn't
+                    // accumulate snapshot files over a session.
+                    if let Some(snapshot) = snapshot {
+                        let _ = fs::remove_file(&snapshot);
+                    }
                     // Process slot is free — release the lock first, then
                     // tell the frontend it can start the next queued intake.
                     emit_backend_event(
@@ -630,8 +771,15 @@ fn monitor_backend_exit(app: AppHandle, state: Arc<Mutex<Option<ManagedProcess>>
                         }),
                         &log_file,
                     );
+                    let snapshot = process.config_snapshot.take();
                     *guard = None;
                     drop(guard);
+                    // The per-job config snapshot has served its purpose now that
+                    // the process is gone — remove it so avtget_temp doesn't
+                    // accumulate snapshot files over a session.
+                    if let Some(snapshot) = snapshot {
+                        let _ = fs::remove_file(&snapshot);
+                    }
                     // Process slot is free — release the lock first, then
                     // tell the frontend it can start the next queued intake.
                     emit_backend_event(
@@ -919,6 +1067,21 @@ fn start_job(
         );
     }
 
+    // Per-job frozen config snapshot (written by freeze_config at GO time). When
+    // present, the spawned backend reads it via AVTGET_CONFIG_PATH instead of the
+    // live config.ini, so a queued/running job is immune to later setting edits.
+    // Pulled out of the payload so it isn't forwarded into the backend's JobConfig.
+    let config_snapshot_path = object
+        .remove("config_snapshot_path")
+        .as_ref()
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from);
+    let child_config_path = config_snapshot_path
+        .clone()
+        .unwrap_or_else(|| config_path.clone());
+
     let job_config_json =
         serde_json::to_string(&Value::Object(object)).map_err(|err| err.to_string())?;
     let backend_executable = resolve_backend_executable()
@@ -958,7 +1121,7 @@ fn start_job(
     );
     emit_backend_log(
         &app,
-        format!("Config path: {}", config_path.to_string_lossy()),
+        format!("Config path: {}", child_config_path.to_string_lossy()),
         &log_file,
     );
 
@@ -968,7 +1131,7 @@ fn start_job(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .env("AVTGET_CONFIG_PATH", config_path.to_string_lossy().to_string());
+        .env("AVTGET_CONFIG_PATH", child_config_path.to_string_lossy().to_string());
     #[cfg(windows)]
     command.creation_flags(CREATE_NO_WINDOW);
 
@@ -991,7 +1154,10 @@ fn start_job(
         thread::spawn(move || stream_backend_stderr(stderr, app_for_stderr, log_for_stderr));
     }
 
-    *guard = Some(ManagedProcess { child });
+    *guard = Some(ManagedProcess {
+        child,
+        config_snapshot: config_snapshot_path,
+    });
     drop(guard);
 
     monitor_backend_exit(app, state.process.clone(), log_file);
@@ -1092,6 +1258,40 @@ fn get_config() -> Result<SettingsPayload, String> {
 #[tauri::command]
 fn save_config(settings: SettingsPayload) -> Result<(), String> {
     save_config_file(&settings)
+}
+
+// Immediate, write-only mirror of the five main-window checkboxes into
+// config.ini. Reads the current settings (defaults, paths, etc.) and rewrites
+// the file with the new live toggle state, leaving everything else untouched.
+#[tauri::command]
+fn set_live_modes(modes: LiveModes) -> Result<(), String> {
+    let settings = load_or_create_config()?;
+    write_config_file(&settings, &modes)
+}
+
+// Freeze the current config.ini into a per-job snapshot so the settings that
+// govern a job are locked in at GO time and can't be mutated by a later toggle
+// or Settings-Save while the job waits in the queue. The spawned backend reads
+// this snapshot via AVTGET_CONFIG_PATH (see start_job); every path in it is
+// absolute, so it resolves correctly regardless of the snapshot's own location.
+// Regenerated from the parsed settings (not a raw copy) so it's always a
+// complete, well-formed file. Returns the absolute snapshot path; the snapshot
+// is deleted when its job's backend process exits.
+#[tauri::command]
+fn freeze_config() -> Result<String, String> {
+    let settings = load_or_create_config()?;
+    let live = read_live_modes_from_disk(&settings);
+    let snapshot_dir = resolve_temp_dir(&settings).join("config-snapshots");
+    fs::create_dir_all(&snapshot_dir).map_err(|err| {
+        format!(
+            "Failed to create config snapshot directory at {}: {err}",
+            snapshot_dir.display()
+        )
+    })?;
+    let dest = snapshot_dir.join(format!("config-{}.ini", next_snapshot_id()));
+    fs::write(&dest, config_file_contents(&settings, &live))
+        .map_err(|err| format!("Failed to write config snapshot at {}: {err}", dest.display()))?;
+    Ok(dest.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
@@ -1515,6 +1715,8 @@ fn main() {
             cancel_job,
             get_config,
             save_config,
+            set_live_modes,
+            freeze_config,
             log_message,
             check_ollama_available,
             show_open_dialog,

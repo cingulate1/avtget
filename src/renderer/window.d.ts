@@ -12,6 +12,22 @@ export interface DesktopAPI {
   // Configuration
   getConfig(): Promise<Settings>;
   saveConfig(settings: Settings): Promise<void>;
+  // Live working-state mirror: persist the five main-window checkboxes to
+  // config.ini immediately on every change (unidirectional GUI -> file). The
+  // GUI seeds these from the default_* keys once on startup and never reads
+  // them back, so external edits to config.ini are not reflected while running.
+  setLiveModes(modes: {
+    video: boolean;
+    audio: boolean;
+    transcript: boolean;
+    summarize: boolean;
+    verbose: boolean;
+  }): Promise<void>;
+  // Freeze the current config.ini into a per-job snapshot and resolve with its
+  // absolute path. Called at GO time (once per submitted input); the path rides
+  // that job's JobConfig so the spawned backend reads the frozen copy via
+  // AVTGET_CONFIG_PATH and is immune to later config edits.
+  freezeConfig(): Promise<string>;
   // Dialogs
   showOpenDialog(options: any): Promise<string | null>;
   showMessageBox(options: any): Promise<number>;

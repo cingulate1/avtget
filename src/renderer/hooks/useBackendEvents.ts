@@ -3,7 +3,7 @@ import { useJobStore } from '../store/jobStore';
 import { useLogStore } from '../store/logStore';
 import { sanitizeUrl } from '../utils/youtube';
 import { getDesktopAPI } from '../desktopApi';
-import { startExternalJobNow } from '../externalSubmit';
+import { dispatchNext } from '../jobDispatch';
 import type { BackendEvent, ArtifactStatusEvent, StatusChangeEvent, StageCountEvent, ProgressEvent, JobFinishedEvent, JobErrorEvent, LogEvent } from '@/shared/types';
 
 // Helper to format stage status - skips "getting" prefix for stages that already have a verb
@@ -94,16 +94,21 @@ export function useBackendEvents() {
 
         case 'job_finished': {
           const finishedEvent = event as JobFinishedEvent;
-          setRunning(false);
+          // isRunning is owned by `backend_exited` (fired once the process slot
+          // actually clears). job_finished arrives while the process is still
+          // alive, so we deliberately don't touch isRunning here.
           addLog(finishedEvent.summary);
           setStatusLine('');
           // Clear input URLs for successfully completed jobs
           clearInputsForCompletedJobs();
-          // Remove placeholder jobs that were never processed by the backend
-          // (e.g., playlist/channel URLs that were expanded into individual video jobs)
-          const { jobs, removeJob: remove } = useJobStore.getState();
+          // Remove placeholder jobs that the backend never processed (e.g. a
+          // playlist/channel URL expanded into individual video jobs). Skip
+          // anything still in the job queue — those are legitimately queued
+          // future work, not stale placeholders, and must not be deleted.
+          const { jobs, jobQueue, removeJob: remove } = useJobStore.getState();
+          const queuedIds = new Set(jobQueue.map((unit) => unit.itemId));
           for (const [id, job] of jobs) {
-            if (!job.displayName && job.status === 'queued') {
+            if (!job.displayName && job.status === 'queued' && !queuedIds.has(id)) {
               remove(id);
             }
           }
@@ -112,7 +117,9 @@ export function useBackendEvents() {
 
         case 'job_error': {
           const errorEvent = event as JobErrorEvent;
-          setRunning(false);
+          // isRunning is cleared by backend_exited, which always follows an
+          // error exit — leaving it owned by one place keeps the dispatch in
+          // sync with the real process slot.
           setHasJobError(true);  // Mark that an actual job error occurred
           addLog(`Error: ${errorEvent.error}`, true);
           setStatusLine('');
@@ -120,18 +127,15 @@ export function useBackendEvents() {
         }
 
         case 'backend_exited': {
-          // The backend process has fully exited and the shell's process
-          // slot is clear — only now is it safe to start the next queued
-          // Firefox-extension intake. (`job_finished` arrives before the
-          // process exits; draining there raced the exit monitor and a
-          // popped intake could be lost to "Backend already running".)
-          // One at a time — the next backend_exited drains the next entry.
-          // Error exits emit this too, so the queue no longer stalls when a
-          // batch dies without a job_finished.
-          const nextExternal = useJobStore.getState().drainNextExternalJob();
-          if (nextExternal) {
-            void startExternalJobNow(nextExternal);
-          }
+          // The backend process has fully exited and the shell's process slot
+          // is clear — only now is it safe to start the next queued job.
+          // (`job_finished` arrives before the process exits; dispatching there
+          // raced the exit monitor and a unit could be lost to "Backend already
+          // running".) Error exits emit this too, so the queue never stalls on
+          // a job that dies without a job_finished. One at a time — the next
+          // backend_exited dispatches the next unit.
+          setRunning(false);
+          dispatchNext();
           break;
         }
       }

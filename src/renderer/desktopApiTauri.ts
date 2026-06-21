@@ -92,6 +92,20 @@ const tauriDesktopApi: DesktopAPI = {
     return invoke('save_config', { settings }).then(() => undefined);
   },
 
+  setLiveModes(modes: {
+    video: boolean;
+    audio: boolean;
+    transcript: boolean;
+    summarize: boolean;
+    verbose: boolean;
+  }): Promise<void> {
+    return invoke('set_live_modes', { modes }).then(() => undefined);
+  },
+
+  freezeConfig(): Promise<string> {
+    return invoke<string>('freeze_config');
+  },
+
   showOpenDialog(options: any): Promise<string | null> {
     return invoke<string | null>('show_open_dialog', { options });
   },
