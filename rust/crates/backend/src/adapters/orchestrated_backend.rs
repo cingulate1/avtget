@@ -7,7 +7,6 @@ use crate::orchestration::local_media::{LocalMediaExecutionRequest, LocalMediaOr
 use crate::orchestration::non_local::{NonLocalExecutionRequest, NonLocalOrchestrator};
 use crate::orchestration::routing::{decide_routing, RoutingDecision};
 
-use super::channel_scrape_bridge::PythonChannelScrapeBridgeAdapter;
 use super::ffmpeg::CliFfmpegAdapter;
 use super::transcript_clean_bridge::PythonTranscriptCleanBridgeAdapter;
 use super::video_metadata_bridge::PythonVideoMetadataBridgeAdapter;
@@ -19,7 +18,6 @@ use super::{AdapterOutcome, AdapterRequest, BackendAdapter};
 pub struct OrchestratedBackendAdapter {
     ffmpeg: CliFfmpegAdapter,
     whisper: PythonWhisperBridgeAdapter,
-    channel_scrape: PythonChannelScrapeBridgeAdapter,
     transcript_cleaner: PythonTranscriptCleanBridgeAdapter,
     video_metadata: PythonVideoMetadataBridgeAdapter,
 }
@@ -75,7 +73,7 @@ impl BackendAdapter for OrchestratedBackendAdapter {
                     &ytdlp,
                     &self.ffmpeg,
                     &self.whisper,
-                    &self.channel_scrape,
+                    &ytdlp,
                     &self.transcript_cleaner,
                     &self.video_metadata,
                 );

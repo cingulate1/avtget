@@ -157,12 +157,6 @@ where
             adapter_request.python_whisper_bridge.as_deref(),
             "video_metadata_bridge.py",
         );
-        let channel_bridge = resolve_bridge_script(
-            &adapter_request.config_path,
-            adapter_request.python_whisper_bridge.as_deref(),
-            "channel_scrape_bridge.py",
-        );
-
         if !modes.video && !modes.audio && !modes.transcript {
             return Ok("No effective output modes selected".to_owned());
         }
@@ -175,14 +169,7 @@ where
             return Ok("Index refresh completed".to_owned());
         }
 
-        let parsed = self.parse_inputs(
-            job_config,
-            settings,
-            adapter_request,
-            cancel_token,
-            channel_bridge.as_deref(),
-            verbose,
-        )?;
+        let parsed = self.parse_inputs(job_config, adapter_request, cancel_token, verbose)?;
 
         self.emit_unsupported_inputs(&parsed.unsupported_inputs, modes, emitter, cancel_token)?;
 
@@ -303,14 +290,11 @@ where
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn parse_inputs(
         &self,
         job_config: &JobConfig,
-        settings: &Settings,
         adapter_request: &AdapterRequest,
         cancel_token: &CancellationToken,
-        channel_bridge: Option<&Path>,
         verbose: bool,
     ) -> Result<ParsedInputs> {
         let mut parsed = ParsedInputs::default();
@@ -327,25 +311,13 @@ where
             .and_then(|value| parse_timeframe_days(value));
         if let (Some(channel), Some(days)) = (channel_url.clone(), timeframe_days) {
             self.ensure_not_cancelled(cancel_token)?;
-            let bridge = channel_bridge.ok_or_else(|| {
-                BackendError::InvalidSettings(
-                    "channel_scrape_bridge.py is required for channel timeframe scraping"
-                        .to_owned(),
-                )
-            })?;
             adapter_request.emitter.emit(BackendEvent::Log {
                 message: format!("Scraping channel URLs (last {} days)...", days),
             })?;
             let request = ChannelScrapeRequest {
                 python_executable: adapter_request.python_executable.clone(),
-                bridge_script: bridge.to_path_buf(),
                 channel_url: channel.clone(),
                 timeframe_days: days,
-                browser: settings.browser.clone(),
-                browser_path: resolve_tool_path(
-                    &adapter_request.config_path,
-                    &settings.browser_path,
-                ),
                 verbose,
             };
             let urls = self.channel_scrape.scrape_channel_urls(request)?;

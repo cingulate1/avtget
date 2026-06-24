@@ -1,4 +1,3 @@
-pub mod channel_scrape_bridge;
 pub mod ffmpeg;
 pub mod orchestrated_backend;
 pub mod temp_storage;
@@ -115,11 +114,8 @@ pub trait WhisperBridgeAdapter: Send + Sync {
 
 pub struct ChannelScrapeRequest {
     pub python_executable: String,
-    pub bridge_script: PathBuf,
     pub channel_url: String,
     pub timeframe_days: i64,
-    pub browser: String,
-    pub browser_path: Option<String>,
     pub verbose: bool,
 }
 

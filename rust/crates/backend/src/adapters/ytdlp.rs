@@ -1,8 +1,9 @@
 use std::process::{Command, Output, Stdio};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use avtget_domain::{BackendError, Result};
 
-use super::YtDlpAdapter;
+use super::{ChannelScrapeAdapter, ChannelScrapeRequest, YtDlpAdapter};
 
 #[derive(Debug, Default)]
 pub struct CliYtDlpAdapter {
@@ -249,5 +250,133 @@ impl YtDlpAdapter for CliYtDlpAdapter {
         }
         Self::ensure_success(output, "yt-dlp subtitle download")?;
         Ok(())
+    }
+}
+
+impl ChannelScrapeAdapter for CliYtDlpAdapter {
+    /// Enumerate a channel's video URLs within the timeframe using yt-dlp.
+    ///
+    /// Replaces the former Selenium DOM scrape: yt-dlp is already this project's
+    /// download workhorse, is community-maintained against YouTube's frontend
+    /// churn, and yields exact `upload_date`s. The channel's "Videos" tab is
+    /// newest-first, so `--break-match-filters "upload_date>=CUTOFF"` collects
+    /// every in-range video and stops the walk at the first too-old one;
+    /// `--lazy-playlist` makes that early stop actually save work.
+    fn scrape_channel_urls(&self, request: ChannelScrapeRequest) -> Result<Vec<String>> {
+        let videos_url = normalize_channel_videos_url(&request.channel_url);
+        let cutoff = cutoff_yyyymmdd(request.timeframe_days);
+
+        let mut args = vec![
+            "--lazy-playlist".to_owned(),
+            "--break-match-filters".to_owned(),
+            format!("upload_date>={cutoff}"),
+            "--print".to_owned(),
+            "%(webpage_url)s".to_owned(),
+            // A single premiere/members-only entry shouldn't abort the walk
+            // before we reach the older videos behind it.
+            "--ignore-no-formats-error".to_owned(),
+        ];
+        if !request.verbose {
+            args.push("--no-warnings".to_owned());
+        }
+        args.push(videos_url);
+
+        let output = self.execute_with_fallback(&request.python_executable, &args, true)?;
+        let code = output.status.code();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let urls: Vec<String> = stdout
+            .lines()
+            .map(str::trim)
+            .filter(|line| line.starts_with("http"))
+            .map(str::to_owned)
+            .collect();
+
+        // yt-dlp exits 101 when `--break-match-filters` stops the walk at the
+        // first too-old video — the normal "reached the timeframe boundary"
+        // outcome. Exit 0 means the whole channel was within range. Anything
+        // else with no URLs collected is a genuine failure worth surfacing.
+        let reached_boundary = matches!(code, Some(0) | Some(101));
+        if !reached_boundary && urls.is_empty() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(BackendError::Process(format!(
+                "yt-dlp channel enumeration failed (code {code:?}): {}",
+                stderr.trim()
+            )));
+        }
+        Ok(urls)
+    }
+}
+
+/// Normalize a channel URL to its "Videos" tab so enumeration is scoped to
+/// long-form uploads (mirrors the previous scraper's behavior).
+fn normalize_channel_videos_url(url: &str) -> String {
+    let trimmed = url.trim().trim_end_matches('/');
+    if trimmed.to_ascii_lowercase().contains("/videos") {
+        trimmed.to_owned()
+    } else {
+        format!("{trimmed}/videos")
+    }
+}
+
+/// Compute `today - days` as a `YYYYMMDD` string (UTC) for yt-dlp's
+/// `upload_date` filter. The bound is inclusive, matching the prior
+/// `age_in_days <= timeframe` semantics.
+fn cutoff_yyyymmdd(days: i64) -> String {
+    let now_secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let days_since_epoch = now_secs / 86_400 - days.max(0);
+    let (y, m, d) = civil_from_days(days_since_epoch);
+    format!("{y:04}{m:02}{d:02}")
+}
+
+/// Convert days since the Unix epoch (1970-01-01) into a `(year, month, day)`
+/// calendar date. Howard Hinnant's public-domain `civil_from_days` algorithm —
+/// avoids pulling in a date crate for this single conversion.
+fn civil_from_days(z: i64) -> (i64, u32, u32) {
+    let z = z + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097; // [0, 146096]
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365; // [0, 399]
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // [0, 365]
+    let mp = (5 * doy + 2) / 153; // [0, 11]
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32; // [1, 31]
+    let m = (mp + if mp < 10 { 3 } else { -9 }) as u32; // [1, 12]
+    (if m <= 2 { y + 1 } else { y }, m, d)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{civil_from_days, normalize_channel_videos_url};
+
+    #[test]
+    fn civil_from_days_known_dates() {
+        assert_eq!(civil_from_days(0), (1970, 1, 1));
+        assert_eq!(civil_from_days(10_957), (2000, 1, 1));
+        assert_eq!(civil_from_days(19_723), (2024, 1, 1));
+        // 2024 is a leap year — day after Feb 28 is Feb 29.
+        assert_eq!(civil_from_days(19_782), (2024, 2, 29));
+    }
+
+    #[test]
+    fn normalize_appends_videos_tab_once() {
+        assert_eq!(
+            normalize_channel_videos_url("https://www.youtube.com/@t3dotgg"),
+            "https://www.youtube.com/@t3dotgg/videos"
+        );
+        assert_eq!(
+            normalize_channel_videos_url("https://www.youtube.com/@t3dotgg/videos"),
+            "https://www.youtube.com/@t3dotgg/videos"
+        );
+        assert_eq!(
+            normalize_channel_videos_url("https://www.youtube.com/@t3dotgg/videos/"),
+            "https://www.youtube.com/@t3dotgg/videos"
+        );
+        assert_eq!(
+            normalize_channel_videos_url("https://www.youtube.com/channel/UC123"),
+            "https://www.youtube.com/channel/UC123/videos"
+        );
     }
 }
