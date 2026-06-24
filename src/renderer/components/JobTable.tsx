@@ -3,6 +3,7 @@ import { useJobStore } from '../store/jobStore';
 import { useThemeStore, themes } from '../store/themeStore';
 import { getStatusEmoji, getRowBackgroundColor } from '../utils/status';
 import { getDesktopAPI } from '../desktopApi';
+import { isChannelUrl } from '../utils/youtube';
 import type { JobItem } from '@/shared/types';
 
 interface ContextMenu {
@@ -54,7 +55,14 @@ export function JobTable() {
     removeJob(job.itemId);
   };
 
-  const jobsArray = Array.from(jobs.values());
+  // A channel URL is a container, not a downloadable item: at GO it's reserved
+  // as a job (the synchronous dedup anchor that keeps button-mashing a no-op),
+  // but the backend expands it into per-video jobs and never emits events keyed
+  // by the channel URL itself — so it never gets a displayName and would render
+  // as a permanent "Loading..." orphan until job_finished sweeps it up. Hide it.
+  const jobsArray = Array.from(jobs.values()).filter(
+    (job) => !(isChannelUrl(job.itemId) && !job.displayName),
+  );
 
   if (jobsArray.length === 0) {
     return (

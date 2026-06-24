@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "avtget",
+        "title": "Avtget",
         "width": 1024,
         "height": 1190,
         "resizable": true
