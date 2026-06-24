@@ -16,6 +16,7 @@ export function JobTable() {
   const desktopAPI = getDesktopAPI();
   const jobs = useJobStore((s) => s.jobs);
   const clearCompletedJobs = useJobStore((s) => s.clearCompletedJobs);
+  const clearAllJobs = useJobStore((s) => s.clearAllJobs);
   const removeJob = useJobStore((s) => s.removeJob);
   const currentTheme = useThemeStore((s) => s.theme);
   const themeColors = themes[currentTheme];
@@ -55,16 +56,31 @@ export function JobTable() {
     removeJob(job.itemId);
   };
 
+  // Total cull: cancel the running backend (if any), then wipe the queue and
+  // every row. No "Are you sure?" — deliberate, per the app's philosophy. Also
+  // the only way to clear a hidden channel placeholder left stuck after a Stop
+  // (it has no visible ⛔), short of restarting the app.
+  const handleClearAll = () => {
+    desktopAPI.cancelJob();
+    clearAllJobs();
+  };
+
   // A channel URL is a container, not a downloadable item: at GO it's reserved
   // as a job (the synchronous dedup anchor that keeps button-mashing a no-op),
   // but the backend expands it into per-video jobs and never emits events keyed
   // by the channel URL itself — so it never gets a displayName and would render
   // as a permanent "Loading..." orphan until job_finished sweeps it up. Hide it.
-  const jobsArray = Array.from(jobs.values()).filter(
+  const allJobs = Array.from(jobs.values());
+  const jobsArray = allJobs.filter(
     (job) => !(isChannelUrl(job.itemId) && !job.displayName),
   );
 
-  if (jobsArray.length === 0) {
+  // Empty-state keys off the RAW map, not the filtered rows. A lone hidden
+  // channel placeholder (e.g. left behind when a scrape is Stopped before any
+  // video is found) has no visible row, but we must keep the header — and its
+  // Clear All button — reachable so the user can cull that otherwise-stuck
+  // dedup anchor without restarting the app.
+  if (allJobs.length === 0) {
     return (
       <div
         className="flex-1 rounded-md p-4 text-center transition-all duration-[400ms]"
@@ -87,13 +103,22 @@ export function JobTable() {
         >
           Jobs
         </h3>
-        <button
-          onClick={clearCompletedJobs}
-          className="px-3 py-1 text-sm text-white rounded transition-transform duration-[80ms] hover:brightness-110 active:scale-95 active:brightness-90"
-          style={{ backgroundColor: themeColors.buttonPrimary }}
-        >
-          Clear Completed
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleClearAll}
+            className="px-3 py-1 text-sm text-white rounded transition-transform duration-[80ms] hover:brightness-110 active:scale-95 active:brightness-90"
+            style={{ backgroundColor: themeColors.buttonSecondary }}
+          >
+            Clear All
+          </button>
+          <button
+            onClick={clearCompletedJobs}
+            className="px-3 py-1 text-sm text-white rounded transition-transform duration-[80ms] hover:brightness-110 active:scale-95 active:brightness-90"
+            style={{ backgroundColor: themeColors.buttonPrimary }}
+          >
+            Clear Completed
+          </button>
+        </div>
       </div>
       <div
         className="flex-1 rounded-md overflow-auto transition-all duration-[400ms]"

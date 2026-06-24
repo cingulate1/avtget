@@ -72,6 +72,7 @@ interface JobState {
   setStatusTotal: (total: number) => void;
   removeJob: (itemId: string) => void;
   clearCompletedJobs: () => void;
+  clearAllJobs: () => void;
   reset: () => void;
   setShowEpisodeLimit: (show: boolean) => void;
   setEpisodeLimit: (limit: number) => void;
@@ -229,6 +230,13 @@ export const useJobStore = create<JobState>((set, get) => ({
 
     set({ jobs: filtered });
   },
+
+  // "Clear All" — a total cull. Drops every job row (including hidden
+  // channel-container placeholders that have no ⛔ of their own) AND the entire
+  // pending queue in one atomic update. The caller cancels the running backend;
+  // its backend_exited then resets isRunning and finds an empty queue. No
+  // confirmation by design — matches the app's no-prompt philosophy.
+  clearAllJobs: () => set({ jobs: new Map(), jobQueue: [] }),
 
   reset: () => set({
     jobs: new Map(),
