@@ -1,0 +1,19 @@
+# Normalize line endings across machines.
+# Text files are stored as LF in the repo and checked out as LF,
+# overriding any local core.autocrlf=true (which otherwise causes
+# generated files like src-tauri/gen/schemas/*.json to show as
+# perpetually "modified" on Windows).
+* text=auto eol=lf
+
+# Explicitly mark common binary types so they are never normalized.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.icns binary
+*.exe  binary
+*.dll  binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
