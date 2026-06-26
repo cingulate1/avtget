@@ -3,7 +3,13 @@ import { useThemeStore, themes } from '../store/themeStore';
 import { getDesktopAPI } from '../desktopApi';
 import { submitInputs } from '../jobDispatch';
 
-export function ActionButtons({ timeframe }: { timeframe?: string }) {
+export function ActionButtons({
+  timeframe,
+  timeframeFrom,
+}: {
+  timeframe?: string;
+  timeframeFrom?: string;
+}) {
   const isRunning = useJobStore((s) => s.isRunning);
   const queueLength = useJobStore((s) => s.jobQueue.length);
   const currentTheme = useThemeStore((s) => s.theme);
@@ -14,7 +20,7 @@ export function ActionButtons({ timeframe }: { timeframe?: string }) {
     // when there are no new unique inputs, so button-mashing does nothing. New
     // uniques are frozen at this instant and appended to the queue to auto-run
     // after whatever is already running/queued.
-    void submitInputs(timeframe);
+    void submitInputs(timeframe, timeframeFrom);
   };
 
   const handleStop = () => {

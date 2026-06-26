@@ -32,6 +32,12 @@ pub struct JobConfig {
     pub program_dir: Option<String>,
     #[serde(default)]
     pub timeframe: Option<String>,
+    // Near boundary ("from" side) of the channel scrape window: how far back to
+    // START collecting. None means "today" (no upper date bound). `timeframe` is
+    // the far boundary ("to" side); together they bound uploads to
+    // [today - to, today - from]. The frontend guarantees from <= to.
+    #[serde(default)]
+    pub timeframe_from: Option<String>,
     #[serde(default)]
     pub transcript_source: Option<String>,
     // Per-job override for the transcript-cleaning selector. When Some, takes

@@ -17,6 +17,11 @@ export interface JobConfig {
   verbose?: boolean;
   program_dir?: string;
   timeframe?: string;
+  // Near boundary ("from" side) of the channel scrape window: how far back to
+  // START collecting, as a compact string like "7d"/"2w"/"1m". Absent means
+  // "today" (no upper date bound). `timeframe` is the far boundary ("to" side);
+  // together they bound uploads to [today - to, today - from], with from <= to.
+  timeframe_from?: string;
   transcript_source?: string;
   // Per-job override for cleaning. When set, takes precedence over
   // settings.auto_clean_transcript. Used by the Summarize+Fast submit path to

@@ -254,28 +254,41 @@ impl YtDlpAdapter for CliYtDlpAdapter {
 }
 
 impl ChannelScrapeAdapter for CliYtDlpAdapter {
-    /// Enumerate a channel's video URLs within the timeframe using yt-dlp.
+    /// Enumerate a channel's video URLs within the timeframe window using yt-dlp.
     ///
     /// Replaces the former Selenium DOM scrape: yt-dlp is already this project's
     /// download workhorse, is community-maintained against YouTube's frontend
     /// churn, and yields exact `upload_date`s. The channel's "Videos" tab is
-    /// newest-first, so `--break-match-filters "upload_date>=CUTOFF"` collects
-    /// every in-range video and stops the walk at the first too-old one;
-    /// `--lazy-playlist` makes that early stop actually save work.
+    /// newest-first, so the far edge uses `--break-match-filters
+    /// "upload_date>=FAR_CUTOFF"` to collect every in-range video and stop the
+    /// walk at the first too-old one; `--lazy-playlist` makes that early stop
+    /// actually save work.
+    ///
+    /// When the near edge ("from") isn't today, an additional `--match-filters
+    /// "upload_date<=NEAR_CUTOFF"` skips the still-too-recent uploads at the top
+    /// of the tab WITHOUT breaking the walk — so collection resumes once the
+    /// dates fall into the window. from = today (`from_days == 0`) drops this
+    /// filter entirely, reducing to the original single-window behavior.
     fn scrape_channel_urls(&self, request: ChannelScrapeRequest) -> Result<Vec<String>> {
         let videos_url = normalize_channel_videos_url(&request.channel_url);
-        let cutoff = cutoff_yyyymmdd(request.timeframe_days);
+        let far_cutoff = cutoff_yyyymmdd(request.to_days);
 
         let mut args = vec![
             "--lazy-playlist".to_owned(),
             "--break-match-filters".to_owned(),
-            format!("upload_date>={cutoff}"),
+            format!("upload_date>={far_cutoff}"),
             "--print".to_owned(),
             "%(webpage_url)s".to_owned(),
             // A single premiere/members-only entry shouldn't abort the walk
             // before we reach the older videos behind it.
             "--ignore-no-formats-error".to_owned(),
         ];
+        // Near edge: skip (but don't break on) uploads newer than the window.
+        if request.from_days > 0 {
+            let near_cutoff = cutoff_yyyymmdd(request.from_days);
+            args.push("--match-filters".to_owned());
+            args.push(format!("upload_date<={near_cutoff}"));
+        }
         if !request.verbose {
             args.push("--no-warnings".to_owned());
         }

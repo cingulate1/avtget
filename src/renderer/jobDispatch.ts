@@ -58,15 +58,19 @@ export function dispatchNext(): void {
 
 // The GO signal. Reads the current inputs + settings, freezes config once per
 // input, turns each NEW unique input into a frozen QueuedJob, and kicks the
-// dispatcher. `timeframe` is the (channel) timeframe string composed in
-// InputSection; Firefox intakes pass none.
+// dispatcher. `timeframe` (far edge) and `timeframeFrom` (near edge, undefined
+// when "today") are the channel scrape window composed in InputSection; Firefox
+// intakes pass none.
 //
 // Dedup: an input is rejected if a job with that sanitized id already exists in
 // the table in ANY state (queued/running/completed/failed), or it repeats
 // earlier in this same press. To re-run an input, remove its job from the table
 // first. A press with no new uniques is a harmless no-op (so Go can stay
 // always-enabled and button-mashing does nothing).
-export async function submitInputs(timeframe?: string): Promise<void> {
+export async function submitInputs(
+  timeframe?: string,
+  timeframeFrom?: string,
+): Promise<void> {
   const job = useJobStore.getState();
   const { settings } = useSettingsStore.getState();
   const log = useLogStore.getState();
@@ -150,6 +154,7 @@ export async function submitInputs(timeframe?: string): Promise<void> {
       summarize: frozen.summarize,
       verbose: frozen.verbose,
       timeframe,
+      timeframe_from: timeframeFrom,
       model: frozen.model,
       transcript_source: frozen.transcriptSource,
       auto_clean_transcript: frozen.autoClean,

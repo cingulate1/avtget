@@ -115,7 +115,11 @@ pub trait WhisperBridgeAdapter: Send + Sync {
 pub struct ChannelScrapeRequest {
     pub python_executable: String,
     pub channel_url: String,
-    pub timeframe_days: i64,
+    // Far boundary: collect uploads no older than `today - to_days`.
+    pub to_days: i64,
+    // Near boundary: collect uploads no newer than `today - from_days`. 0 means
+    // "today" — no upper bound (the common single-window case).
+    pub from_days: i64,
     pub verbose: bool,
 }
 

@@ -174,17 +174,22 @@ where
         self.emit_unsupported_inputs(&parsed.unsupported_inputs, modes, emitter, cancel_token)?;
 
         if parsed.channel_url.is_some() && parsed.timeframe_days.is_some() {
-            let timeframe_days = parsed.timeframe_days.unwrap_or(0);
+            let to_days = parsed.timeframe_days.unwrap_or(0);
+            let from_days = parsed.from_days;
             if parsed.urls.is_empty() {
                 emitter.emit(BackendEvent::Log {
                     message: "No videos found in the specified timeframe".to_owned(),
                 })?;
             } else {
+                let window = if from_days > 0 {
+                    format!("between {from_days} and {to_days} days ago")
+                } else {
+                    format!("in the last {to_days} days")
+                };
                 emitter.emit(BackendEvent::Log {
                     message: format!(
-                        "Found {} video(s) from channel in the last {} days",
+                        "Found {} video(s) from channel {window}",
                         parsed.urls.len(),
-                        timeframe_days
                     ),
                 })?;
             }
@@ -309,15 +314,27 @@ where
             .as_ref()
             .and_then(|_| job_config.timeframe.as_ref())
             .and_then(|value| parse_timeframe_days(value));
+        // Near edge ("from"): absent / unparseable means "today" (no upper bound).
+        let from_days = channel_url
+            .as_ref()
+            .and_then(|_| job_config.timeframe_from.as_ref())
+            .and_then(|value| parse_timeframe_days(value))
+            .unwrap_or(0);
         if let (Some(channel), Some(days)) = (channel_url.clone(), timeframe_days) {
             self.ensure_not_cancelled(cancel_token)?;
+            let window = if from_days > 0 {
+                format!("between {from_days} and {days} days ago")
+            } else {
+                format!("last {days} days")
+            };
             adapter_request.emitter.emit(BackendEvent::Log {
-                message: format!("Scraping channel URLs (last {} days)...", days),
+                message: format!("Scraping channel URLs ({window})..."),
             })?;
             let request = ChannelScrapeRequest {
                 python_executable: adapter_request.python_executable.clone(),
                 channel_url: channel.clone(),
-                timeframe_days: days,
+                to_days: days,
+                from_days,
                 verbose,
             };
             let urls = self.channel_scrape.scrape_channel_urls(request)?;
@@ -331,6 +348,7 @@ where
                 .collect();
             parsed.channel_url = Some(channel);
             parsed.timeframe_days = Some(days);
+            parsed.from_days = from_days;
             return Ok(parsed);
         }
 
@@ -378,6 +396,7 @@ where
 
         parsed.channel_url = channel_url;
         parsed.timeframe_days = timeframe_days;
+        parsed.from_days = from_days;
         Ok(parsed)
     }
 
@@ -1755,6 +1774,8 @@ struct ParsedInputs {
     direct_audio_urls: Vec<String>,
     unsupported_inputs: Vec<String>,
     timeframe_days: Option<i64>,
+    // Near edge of the scrape window in days-from-today; 0 means "today".
+    from_days: i64,
     channel_url: Option<String>,
 }
 
