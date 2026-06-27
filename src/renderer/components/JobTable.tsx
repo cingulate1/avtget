@@ -22,6 +22,20 @@ export function JobTable() {
   const themeColors = themes[currentTheme];
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  // Pending single-click timers, keyed `${itemId}:${artifact}`. Held in a ref so
+  // the single- vs double-click discrimination survives table re-renders. The
+  // table re-renders on every streamed event from any running job, which would
+  // otherwise reset a render-scoped timer mid-gesture and break both clicks.
+  const clickTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // Clear any pending click timers on unmount so they don't fire after teardown.
+  useEffect(() => {
+    const timers = clickTimers.current;
+    return () => {
+      timers.forEach((timeout) => clearTimeout(timeout));
+      timers.clear();
+    };
+  }, []);
 
   // Close context menu on click anywhere or Escape
   useEffect(() => {
@@ -178,45 +192,52 @@ export function JobTable() {
                   return <span>{emoji}</span>;
                 }
 
-                // Use a closure to track click timeout for this specific button
-                let clickTimeout: ReturnType<typeof setTimeout> | null = null;
+                // Track this icon's pending single-click in the component-level
+                // ref (see clickTimers) so the gesture survives re-renders.
+                const timerKey = `${job.itemId}:${artifact}`;
+                const filestem = job.displayName as string;
 
                 const handleClick = (e: React.MouseEvent) => {
                   e.preventDefault();
                   e.stopPropagation();
 
-                  // If there's already a pending click, this is part of a double-click
-                  if (clickTimeout) {
+                  const timers = clickTimers.current;
+                  // A pending timer means this is the second click of a double —
+                  // leave it for handleDoubleClick to cancel.
+                  if (timers.has(timerKey)) {
                     return;
                   }
 
-                  // Set timeout for single-click action
-                  clickTimeout = setTimeout(() => {
-                    clickTimeout = null;
-                    void desktopAPI.revealArtifact(artifact, job.displayName);
+                  // Single-click (once the double-click grace window elapses):
+                  // open the file directly.
+                  const timeout = setTimeout(() => {
+                    timers.delete(timerKey);
+                    void desktopAPI.openArtifact(artifact, filestem);
                   }, 250);
+                  timers.set(timerKey, timeout);
                 };
 
                 const handleDoubleClick = (e: React.MouseEvent) => {
                   e.preventDefault();
                   e.stopPropagation();
 
-                  // Clear the single-click timeout
-                  if (clickTimeout) {
-                    clearTimeout(clickTimeout);
-                    clickTimeout = null;
+                  // Cancel the pending single-click and reveal the containing
+                  // directory instead.
+                  const timers = clickTimers.current;
+                  const timeout = timers.get(timerKey);
+                  if (timeout) {
+                    clearTimeout(timeout);
+                    timers.delete(timerKey);
                   }
-
-                  // Execute double-click action
-                  void desktopAPI.openArtifact(artifact, job.displayName);
+                  void desktopAPI.revealArtifact(artifact, filestem);
                 };
 
                 return (
                   <button
                     type="button"
                     className="bg-transparent border-0 p-0 m-0 cursor-pointer hover:opacity-80 select-none focus:outline-none"
-                    title="Click: reveal in folder | Double-click: open file"
-                    aria-label={`Click to reveal ${artifact}, double-click to open`}
+                    title="Click: open file | Double-click: open containing folder"
+                    aria-label={`Click to open ${artifact}, double-click to open its folder`}
                     onClick={handleClick}
                     onDoubleClick={handleDoubleClick}
                   >
